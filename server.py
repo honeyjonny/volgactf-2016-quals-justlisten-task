@@ -56,7 +56,9 @@ class Application(tornado.web.Application):
 
     def create_idexes_for_collections(self):
         for coll in self.COLLECTIONS.keys():
+            
             indexes = self.COLLECTIONS[coll]
+
             for index_name in indexes.keys():
                 self.db[coll].create_index([ ( index_name, 1), ("unique", indexes[index_name] ) ] )
 

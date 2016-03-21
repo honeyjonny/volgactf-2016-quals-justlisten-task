@@ -19,12 +19,24 @@ class Basehandler(tornado.web.RequestHandler):
 		return self.application.db.users.find( userDto )
 
 	async def save_cookie_for_user(self, user, cookie):
-		return self.application.db.tokens.save( { "user_id": str(user["_id"]), "value": cookie } ) 
+		return self.application.db.tokens.save( { "user_id": user["_id"], "value": cookie } ) 
 
 	async def delete_prev_tokens(self, user):
-		deleted = self.application.db.tokens.delete_many(  { "user_id": str(user["_id"])} )
+		deleted = self.application.db.tokens.delete_many(  { "user_id": user["_id"] } )
 		#print(deleted.deleted_count)
 		return deleted.deleted_count
+
+	async def find_user_by_token(self, token):
+		cur = self.application.db.tokens.find( { "value" : token } )
+		if cur.count() == 1:
+			token_doc = cur[0]
+			userCur = self.application.db.users.find( {"_id": token_doc["user_id"] }  )
+			assert userCur.count() == 1
+			
+			user = userCur[0]
+			return user
+		else:
+			return None
 
 
 
@@ -38,7 +50,22 @@ class Basehandler(tornado.web.RequestHandler):
 
 
 	async def prepare(self):
-		pass
+		cookie_value = self.get_cookie("_ws_token")
+
+		if cookie_value == None:
+			self.current_user = None;
+
+		else:
+			user = await self.find_user_by_token(cookie_value)
+			if user == None:
+				self.set_status(404)
+				self.write({"error": "invalid token"})
+				self.finish()
+
+			else:
+				self.current_user = user
+
+
 
 
 
@@ -46,7 +73,9 @@ class MainHandler(Basehandler):
 	async def get(self):
 		resp = await self.find_users()
 
-		self.write({"users": resp})
+		print (self.current_user)
+
+		self.write({"users": resp, "current": self.current_user["name"]})
 
 
 class RegisterHandler(Basehandler):
