@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<link rel="stylesheet" type="text/css" href="{{ static_url("css/bootstrap.min.css") }}">
+	<title>{% block title %} Simple web chat {% end %}</title>
+</head>
+<body>
+	<div class="container">
+		<div style="max-width: 640px;  padding: 15px;  margin: 0 auto;">
+
+		{% block nav %}
+			<ul class="nav nav-tabs" role="tablist">
+				<li role="presentation" style="float: right;"><a href="/login">Login</a></li>
+				<li role="presentation" style="float: right;"><a href="/register">Register</a></li>
+				{% block additional %}
+
+					{% if current != None %}
+					<li role="presentation" style="float: left;"><h5><span class="label label-success">{{current}}</span></h5></li>
+					{% end %}
+
+				{% end %}
+		    </ul>
+		{% end %}
+
+		{% block body %}
+
+		{% end %}
+		</div>
+	</div>
+</body>
+</html>

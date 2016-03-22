@@ -34,13 +34,13 @@ class Application(tornado.web.Application):
             (r"/login", LoginHandler),
             (r"/channels", ChannelsHandler),
             (r"/logout", Logouthandler),
-            (r"/channels/([\w]+)", WSConnectionHandler),
+            (r"/channels/([\w]{24})", WSConnectionHandler),
         ]
 
         settings = dict(
             cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
             template_path=os.path.join(os.path.dirname(__file__), "templates"),
-            static_path=os.path.join(os.path.dirname(__file__), "static"),
+            static_path=os.path.join(os.path.dirname(__file__), "public"),
             #xsrf_cookies=True,
         )
 

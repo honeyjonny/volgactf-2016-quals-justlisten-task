@@ -56,13 +56,20 @@ class MongoDbModelsMiddleware(object):
 		if cursor.count() == 1:
 			return cursor[0]
 		else:
-			raise Exception("Multiple channel return by one channelId")
+			return None
 
 	def create_connection_to_channel(self, channelDoc, token):
-		return self.application.db.connections.save( { "token": token, "channel_id": str(channelDoc["_id"]) } )
+		cur = self.application.db.connections.find( { "token": token, "channel_id": str(channelDoc["_id"]) } )
+		if cur.count() == 0:
+			return self.application.db.connections.save( { "token": token, "channel_id": str(channelDoc["_id"]) } )			
+		else:
+			return cur[0]["_id"]
 
 	def find_all_connections_to_channel(self, channelDoc):
-		return self.application.db.connections.find( { "channel_id": str(channelDoc["_id"]) } )	
+		return self.application.db.connections.find( { "channel_id": str(channelDoc["_id"]) } )
+
+	def delete_connection_entries(self, token):
+		return self.application.db.connections.remove( { "token": token } )	
 
 
 class WSClientPoolMiddleware(object):
@@ -71,7 +78,8 @@ class WSClientPoolMiddleware(object):
 		self.application.ws[token] = connection
 
 	def remove_connection(self, token):
-		del self.application.ws[token]
+		if self.application.ws.get(token) != None:
+			del self.application.ws[token]
 
 	def get_connection(self, token):
 		return self.application.ws[token]
@@ -145,7 +153,8 @@ class MainHandler(Basehandler):
 
 		curr_username = self.current_user["name"] if self.current_user else None
 
-		self.write( { "users": resp, "current": curr_username } )
+		#self.write( { "users": resp, "current": curr_username } )
+		self.render("index.html", users = resp, current = curr_username  )
 
 
 class RegisterHandler(Basehandler):
@@ -243,40 +252,54 @@ class WSConnectionHandler(BaseWSHandler):
 # test case
 # 
 # (function()
-#	{var ws = new WebSocket("ws://localhost:7777/channels/56f0d8f8f291101bb8866fb1"); 
+#	{var ws = new WebSocket("ws://localhost:7777/channels/56f191e02b03a11afcc1e6be"); 
 #	ws.onopen = function(){ console.log("open channel"); ws.send("hello"); }; 
 #	ws.onmessage = function(evt){ console.log(evt.data);}; })()
 #
 #
 	def open(self, channelId):
+
 		channel = self.find_channel_byid(channelId)
 
 		if channel != None:
 			self.current_channel = channel
+		else:
+			self.write_message("Invalid channelId on connection argument")
+			self.close()
+			return			
 
 		print(self.current_user)
 		print(self.current_token)
 		print(self.current_channel)
 
 		if channel["name"] == "flag":
-			print("You cannot explicity connect to this flag channel")
-			self.write_message("You cannot explicity connect to this flag channel")
+			self.write_message("You cannot explicity connect to this flag channel ;{ ")
 			self.close()
 			return
 
 		connId = self.create_connection_to_channel(channel, self.current_token)
 		self.add_connection(self.current_token, self)
 
-		self.write_message( { "connId": str(connId) } )
+		self.write_message( { "connId": str(connId), "token": self.current_token, "channel": channelId } )
+
 
 	def on_message(self, message):
+
 		print (message)
 		print(self.current_user)
 		print(self.current_token)
 		print(self.current_channel)
 
+		connections = self.find_all_connections_to_channel(self.current_channel)
+		for conn in connections:
+			ws = self.get_connection(conn["token"])
+			#if self.current_token != conn["token"]:
+			ws.write_message(message)
+
+
 	def on_close(self):
 		self.remove_connection(self.current_token)
+		self.delete_connection_entries(self.current_token)
 
 
 
