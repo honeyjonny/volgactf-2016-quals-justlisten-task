@@ -23,7 +23,7 @@ class Application(tornado.web.Application):
     "users": { "name": True, "pass": False },
     "tokens": { "user_id": True, "value": True },
     "channels": { "name": True },
-    "connections": { "token_id": False, "channel_id": False },
+    "connections": { "token": False, "channel_id": False },
 
     }
 
@@ -33,9 +33,10 @@ class Application(tornado.web.Application):
             (r"/register", RegisterHandler),
             (r"/login", LoginHandler),
             (r"/channels", ChannelsHandler),
-            (r"/logout", Loguothandler),
+            (r"/logout", Logouthandler),
+            (r"/channels/([\w]+)", WSConnectionHandler),
         ]
-        
+
         settings = dict(
             cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
             template_path=os.path.join(os.path.dirname(__file__), "templates"),
@@ -45,10 +46,13 @@ class Application(tornado.web.Application):
 
         self.db = pymongo.MongoClient("localhost", 27017).tutorial
 
+        self.ws = dict()
+
         self.init_database()
         self.create_idexes_for_collections()
 
         super(Application, self).__init__(handlers, **settings)
+
 
     def init_database(self):
         for coll in self.COLLECTIONS.keys():
@@ -56,6 +60,7 @@ class Application(tornado.web.Application):
                 self.db.create_collection(coll)
             except Exception as e:
                 print(e)
+
 
     def create_idexes_for_collections(self):
         for coll in self.COLLECTIONS.keys():

@@ -1,10 +1,11 @@
 import tornado.web
+import tornado.websocket
 import tornado.escape
-
-from tornado.web import Finish
 
 from hashlib import md5
 from time import time
+
+from bson import ObjectId
 
 
 class MongoDbModelsMiddleware(object):
@@ -20,8 +21,8 @@ class MongoDbModelsMiddleware(object):
 	async def find_user_by_logindata(self, userDto):
 		return self.application.db.users.find( userDto )
 
-	async def save_cookie_for_user(self, user, cookie):
-		return self.application.db.tokens.save( { "user_id": user["_id"], "value": cookie } ) 
+	async def save_cookie_for_user(self, userDoc, cookie):
+		return self.application.db.tokens.save( { "user_id": userDoc["_id"], "value": cookie } ) 
 
 	async def delete_prev_tokens(self, userDoc):
 		deleted = self.application.db.tokens.delete_many(  { "user_id": userDoc["_id"] } )
@@ -49,14 +50,44 @@ class MongoDbModelsMiddleware(object):
 	async def find_channel_by_name(self, channelName):
 		return self.application.db.channels.find( { "name": channelName } )
 
-	async def create_connection_to_channel(self, channelDoc, tokenDoc):
-		return self.application.db.connections.save( { "token_id": str( tokenDoc["_id"] ), "channel_id": str(channelDoc["_id"]) } )
+	def find_channel_byid(self, channelId):
+		chid = ObjectId(channelId)
+		cursor = self.application.db.channels.find( { "_id": chid } )
+		if cursor.count() == 1:
+			return cursor[0]
+		else:
+			raise Exception("Multiple channel return by one channelId")
 
-	async def find_all_connections_to_channel(self, channelDoc):
+	def create_connection_to_channel(self, channelDoc, token):
+		return self.application.db.connections.save( { "token": token, "channel_id": str(channelDoc["_id"]) } )
+
+	def find_all_connections_to_channel(self, channelDoc):
 		return self.application.db.connections.find( { "channel_id": str(channelDoc["_id"]) } )	
 
 
+class WSClientPoolMiddleware(object):
+
+	def add_connection(self, token, connection):
+		self.application.ws[token] = connection
+
+	def remove_connection(self, token):
+		del self.application.ws[token]
+
+	def get_connection(self, token):
+		return self.application.ws[token]
+
+
 class Basehandler(tornado.web.RequestHandler, MongoDbModelsMiddleware):
+
+	@property	
+	def current_token(self):
+		if not hasattr(self, "_current_token"):
+			self._current_token = self.get_cookie("_ws_token")
+		return self._current_token
+
+	@current_token.setter
+	def current_token(self, value):
+		self._current_token = value
 
 	async def generate_session_for_user(self, userDto):
 		digest = md5()
@@ -67,13 +98,13 @@ class Basehandler(tornado.web.RequestHandler, MongoDbModelsMiddleware):
 		return digest.hexdigest()
 
 	async def prepare(self):
-		cookie_value = self.get_cookie("_ws_token")
+		token = self.current_token #self.get_cookie("_ws_token")
 
-		if cookie_value == None:
+		if token == None:
 			self.current_user = None;
 
 		else:
-			user = await self.find_user_by_token(cookie_value)
+			user = await self.find_user_by_token(token)
 			if user == None:
 				self.set_status(404)
 				self.write({"error": "invalid token"})
@@ -87,13 +118,23 @@ class RegisteredOnlyHandler(Basehandler):
 	async def prepare(self):
 		await super().prepare()
 
-		cookie_value = self.get_cookie("_ws_token")
-
-		if self.current_user == None and cookie_value == None:
+		#cookie_value = self.get_cookie("_ws_token")
+		if self.current_user == None and self.current_token == None:
 			self.set_status(401)
 			self.write({"error": "unauthorized"})
 			self.finish()
 
+
+class BaseWSHandler(RegisteredOnlyHandler, tornado.websocket.WebSocketHandler, WSClientPoolMiddleware):
+	@property
+	def current_channel(self):
+		if not hasattr(self, "_current_channel"):
+			self._current_channel = None
+		return self._current_channel
+
+	@current_channel.setter
+	def current_channel(self, value):
+		self._current_channel = value	
 
 
 class MainHandler(Basehandler):
@@ -187,11 +228,57 @@ class ChannelsHandler(RegisteredOnlyHandler):
 		self.redirect("/channels")
 
 
-class Loguothandler(RegisteredOnlyHandler):
+class Logouthandler(RegisteredOnlyHandler):
 	async def get(self):
 		user = self.current_user
 		await self.delete_prev_tokens(user)
 
 		self.set_status(303)
 		self.redirect("/")
+
+
+
+class WSConnectionHandler(BaseWSHandler):
+
+# test case
+# 
+# (function()
+#	{var ws = new WebSocket("ws://localhost:7777/channels/56f0d8f8f291101bb8866fb1"); 
+#	ws.onopen = function(){ console.log("open channel"); ws.send("hello"); }; 
+#	ws.onmessage = function(evt){ console.log(evt.data);}; })()
+#
+#
+	def open(self, channelId):
+		channel = self.find_channel_byid(channelId)
+
+		if channel != None:
+			self.current_channel = channel
+
+		print(self.current_user)
+		print(self.current_token)
+		print(self.current_channel)
+
+		if channel["name"] == "flag":
+			print("You cannot explicity connect to this flag channel")
+			self.write_message("You cannot explicity connect to this flag channel")
+			self.close()
+			return
+
+		connId = self.create_connection_to_channel(channel, self.current_token)
+		self.add_connection(self.current_token, self)
+
+		self.write_message( { "connId": str(connId) } )
+
+	def on_message(self, message):
+		print (message)
+		print(self.current_user)
+		print(self.current_token)
+		print(self.current_channel)
+
+	def on_close(self):
+		self.remove_connection(self.current_token)
+
+
+
+
 
