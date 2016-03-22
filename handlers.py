@@ -1,11 +1,13 @@
 import tornado.web
 import tornado.escape
 
+from tornado.web import Finish
+
 from hashlib import md5
 from time import time
 
 
-class Basehandler(tornado.web.RequestHandler):
+class MongoDbModelsMiddleware(object):
 	async def find_users(self):
 		return [u for u in self.application.db.users.find({}, {"_id": 0 })]
 
@@ -21,8 +23,8 @@ class Basehandler(tornado.web.RequestHandler):
 	async def save_cookie_for_user(self, user, cookie):
 		return self.application.db.tokens.save( { "user_id": user["_id"], "value": cookie } ) 
 
-	async def delete_prev_tokens(self, user):
-		deleted = self.application.db.tokens.delete_many(  { "user_id": user["_id"] } )
+	async def delete_prev_tokens(self, userDoc):
+		deleted = self.application.db.tokens.delete_many(  { "user_id": userDoc["_id"] } )
 		return deleted.deleted_count
 
 	async def find_user_by_token(self, token):
@@ -39,7 +41,7 @@ class Basehandler(tornado.web.RequestHandler):
 		def map_doc_to_dto(chDoc):
 			chDoc["_id"] = str(chDoc["_id"])
 			return chDoc
-		return [ map_doc_to_dto(ch) for ch in self.application.db.channels.find( {} )]
+		return [ map_doc_to_dto(ch) for ch in self.application.db.channels.find( {} ) ]
 
 	async def create_channel_by_name(self, channelName):
 		return self.application.db.channels.save( { "name": channelName } )
@@ -51,14 +53,17 @@ class Basehandler(tornado.web.RequestHandler):
 		return self.application.db.connections.save( { "token_id": str( tokenDoc["_id"] ), "channel_id": str(channelDoc["_id"]) } )
 
 	async def find_all_connections_to_channel(self, channelDoc):
-		return self.application.db.connections.find( { "channel_id": str(channelDoc["_id"]) } )
+		return self.application.db.connections.find( { "channel_id": str(channelDoc["_id"]) } )	
+
+
+class Basehandler(tornado.web.RequestHandler, MongoDbModelsMiddleware):
 
 	async def generate_session_for_user(self, userDto):
 		digest = md5()
 		digest.update(userDto["name"].encode("utf-8"))
 		digest.update(userDto["pass"].encode("utf-8"))
 		digest.update( str( userDto["_id"] ).encode("utf-8") )
-		digest.update(str( time() ).encode("utf-8") )
+		digest.update( str( time() ).encode("utf-8") )		
 		return digest.hexdigest()
 
 	async def prepare(self):
@@ -78,6 +83,16 @@ class Basehandler(tornado.web.RequestHandler):
 				self.current_user = user
 
 
+class RegisteredOnlyHandler(Basehandler):
+	async def prepare(self):
+		await super().prepare()
+
+		cookie_value = self.get_cookie("_ws_token")
+
+		if self.current_user == None and cookie_value == None:
+			self.set_status(401)
+			self.write({"error": "unauthorized"})
+			self.finish()
 
 
 
@@ -100,9 +115,9 @@ class RegisterHandler(Basehandler):
 		password = body["password"]
 
 		cursor = await self.find_user_byname(username)
-		isExist = cursor.count()
+		count = cursor.count()
 
-		if isExist > 0:
+		if count > 0:
 			self.set_status(409)
 			self.write({"error": "user already exists"})
 			self.finish()
@@ -143,7 +158,7 @@ class LoginHandler(Basehandler):
 			return
 
 
-class ChannelsHandler(Basehandler):
+class ChannelsHandler(RegisteredOnlyHandler):
 	async def get(self):
 		channels = await self.get_all_channels()
 
@@ -172,4 +187,11 @@ class ChannelsHandler(Basehandler):
 		self.redirect("/channels")
 
 
+class Loguothandler(RegisteredOnlyHandler):
+	async def get(self):
+		user = self.current_user
+		await self.delete_prev_tokens(user)
+
+		self.set_status(303)
+		self.redirect("/")
 
