@@ -13,7 +13,7 @@ class Basehandler(tornado.web.RequestHandler):
 		return self.application.db.users.save(user)
 
 	async def find_user_byname(self, name):
-		return self.application.db.users.find( {"name":name} )
+		return self.application.db.users.find( {"name": name} )
 
 	async def find_user_by_logindata(self, userDto):
 		return self.application.db.users.find( userDto )
@@ -23,7 +23,6 @@ class Basehandler(tornado.web.RequestHandler):
 
 	async def delete_prev_tokens(self, user):
 		deleted = self.application.db.tokens.delete_many(  { "user_id": user["_id"] } )
-		#print(deleted.deleted_count)
 		return deleted.deleted_count
 
 	async def find_user_by_token(self, token):
@@ -31,14 +30,28 @@ class Basehandler(tornado.web.RequestHandler):
 		if cur.count() == 1:
 			token_doc = cur[0]
 			userCur = self.application.db.users.find( {"_id": token_doc["user_id"] }  )
-			assert userCur.count() == 1
-			
-			user = userCur[0]
-			return user
-		else:
-			return None
+			if userCur.count() == 1:			
+				user = userCur[0]
+				return user		
+		return None
 
+	async def get_all_channels(self):
+		def map_doc_to_dto(chDoc):
+			chDoc["_id"] = str(chDoc["_id"])
+			return chDoc
+		return [ map_doc_to_dto(ch) for ch in self.application.db.channels.find( {} )]
 
+	async def create_channel_by_name(self, channelName):
+		return self.application.db.channels.save( { "name": channelName } )
+
+	async def find_channel_by_name(self, channelName):
+		return self.application.db.channels.find( { "name": channelName } )
+
+	async def create_connection_to_channel(self, channelDoc, tokenDoc):
+		return self.application.db.connections.save( { "token_id": str( tokenDoc["_id"] ), "channel_id": str(channelDoc["_id"]) } )
+
+	async def find_all_connections_to_channel(self, channelDoc):
+		return self.application.db.connections.find( { "channel_id": str(channelDoc["_id"]) } )
 
 	async def generate_session_for_user(self, userDto):
 		digest = md5()
@@ -47,7 +60,6 @@ class Basehandler(tornado.web.RequestHandler):
 		digest.update( str( userDto["_id"] ).encode("utf-8") )
 		digest.update(str( time() ).encode("utf-8") )
 		return digest.hexdigest()
-
 
 	async def prepare(self):
 		cookie_value = self.get_cookie("_ws_token")
@@ -75,7 +87,9 @@ class MainHandler(Basehandler):
 
 		print (self.current_user)
 
-		self.write({"users": resp, "current": self.current_user["name"]})
+		curr_username = self.current_user["name"] if self.current_user else None
+
+		self.write( { "users": resp, "current": curr_username } )
 
 
 class RegisterHandler(Basehandler):
@@ -91,14 +105,14 @@ class RegisterHandler(Basehandler):
 		if isExist > 0:
 			self.set_status(409)
 			self.write({"error": "user already exists"})
-			self.flush()
+			self.finish()
 			return
 
 		usr = {"name":username, "pass": password}
 
 		uid = await self.create_user(usr)
 
-		self.write({"userId": str(uid)})
+		self.write( { "userId": str(uid) } )
 
 
 class LoginHandler(Basehandler):
@@ -127,3 +141,35 @@ class LoginHandler(Basehandler):
 			self.set_cookie("_ws_token", cookie)
 			self.redirect("/")
 			return
+
+
+class ChannelsHandler(Basehandler):
+	async def get(self):
+		channels = await self.get_all_channels()
+
+		self.set_status(200)
+		self.write( { "channels": channels } )
+
+
+	async def post(self):
+		body = tornado.escape.json_decode(self.request.body)
+
+		channelName = body["channelName"]
+
+		channelCur = await self.find_channel_by_name(channelName)
+		count = channelCur.count()
+
+		if count > 0:
+			self.set_status(409)
+			self.write({"error": "channel already exists"})
+			self.finish()
+			return	
+
+		channelId = await self.create_channel_by_name(channelName)
+
+		self.set_status(201)
+		self.write( { "channelId": str(channelId) } )
+		self.redirect("/channels")
+
+
+

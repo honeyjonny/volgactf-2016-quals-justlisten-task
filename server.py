@@ -32,6 +32,7 @@ class Application(tornado.web.Application):
             (r"/", MainHandler),
             (r"/register", RegisterHandler),
             (r"/login", LoginHandler),
+            (r"/channels", ChannelsHandler),
         ]
         settings = dict(
             cookie_secret="__TODO:_GENERATE_YOUR_OWN_RANDOM_VALUE_HERE__",
