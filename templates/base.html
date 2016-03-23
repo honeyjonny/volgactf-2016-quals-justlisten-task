@@ -2,7 +2,7 @@
 <html>
 <head>
 	<link rel="stylesheet" type="text/css" href="{{ static_url("css/bootstrap.min.css") }}">
-	<title>{% block title %} Simple web chat {% end %}</title>
+	<title>{% block title %} WSChat {% end %}</title>
 </head>
 <body>
 	<div class="container">
@@ -10,14 +10,16 @@
 
 		{% block nav %}
 			<ul class="nav nav-tabs" role="tablist">
-				<li role="presentation" style="float: right;"><a href="/login">Login</a></li>
-				<li role="presentation" style="float: right;"><a href="/register">Register</a></li>
-				{% block additional %}
+				{% if current_username != None %}
+					<li role="presentation" style="float: left;"><h5><span class="label label-success">{{current_username}}</span></h5></li>
+					<li role="presentation" style="float: right;"><a href="/logout">Logout</a></li>									
+					<li role="presentation" style="float: right;"><a href="/channels">Channels</a></li>
+					<li role="presentation" style="float: right;"><a href="/">Main</a></li>						
+				{% end %}
 
-					{% if current != None %}
-					<li role="presentation" style="float: left;"><h5><span class="label label-success">{{current}}</span></h5></li>
-					{% end %}
-
+				{% if current_username == None %}
+					<li role="presentation" style="float: right;"><a href="/login">Login</a></li>
+					<li role="presentation" style="float: right;"><a href="/register">Register</a></li>
 				{% end %}
 		    </ul>
 		{% end %}

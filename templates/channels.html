@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+
+{% block body %}
+
+	<div style="margin-top: 30px">
+		<h3><span class="label label-primary">Ready for use channels:</span> </h3>	
+	</div>
+
+	<div class="list-group" style="margin-top: 60px">
+		{% for channel in channels %}
+			<div class="row list-group-item">
+				<p class="text-left col-md-8">{{ channel["name"] }}</p>
+				<button type="button" class="btn btn-primary btn-xs col-md-2" style="float: right;">Connect</button> 
+			</div>
+		{% end %}
+	</div>
+
+
+{% end %}

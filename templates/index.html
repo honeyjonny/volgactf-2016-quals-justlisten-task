@@ -1,18 +1,22 @@
 
 {% extends "base.html" %}
 
-
-
 {% block body %}
 
 	<h2>Hello from WSChat!</h2>
 
-	<h3 style="margin-top: 10px"><span class="label label-info">Our channels is awesome. Just try!</span> </h3>		
+	<div style="margin-top: 10px">
+		<h3><span class="label label-info">Our channels is awesome. Just try!</span> </h3>	
+	</div>
 
-	<ul class="list-group" style="margin-top: 20px">
-	{% for user in users %}
-		<li class="list-group-item"> {{ user["name"] }} </li>
-	{% end %}
-	</ul>
+	<div style="margin-top: 60px">
+		<span class="label label-primary">Peoples who already tryed:</span>	
+
+		<ul class="list-group" style="margin-top: 20px">
+		{% for user in users %}
+			<li class="list-group-item"> {{ user["name"] }} </li>
+		{% end %}
+		</ul>
+	</div>
 
 {% end %}

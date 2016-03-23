@@ -97,6 +97,13 @@ class Basehandler(tornado.web.RequestHandler, MongoDbModelsMiddleware):
 	def current_token(self, value):
 		self._current_token = value
 
+	@property
+	def current_username(self):
+		if self.current_user == None:
+			return None
+		else:
+			return self.current_user["name"]
+
 	async def generate_session_for_user(self, userDto):
 		digest = md5()
 		digest.update(userDto["name"].encode("utf-8"))
@@ -114,9 +121,10 @@ class Basehandler(tornado.web.RequestHandler, MongoDbModelsMiddleware):
 		else:
 			user = await self.find_user_by_token(token)
 			if user == None:
-				self.set_status(404)
-				self.write({"error": "invalid token"})
-				self.finish()
+				return
+				# self.set_status(404)
+				# self.write({"error": "invalid token"})
+				# self.finish()
 
 			else:
 				self.current_user = user
@@ -148,21 +156,21 @@ class BaseWSHandler(RegisteredOnlyHandler, tornado.websocket.WebSocketHandler, W
 class MainHandler(Basehandler):
 	async def get(self):
 		resp = await self.find_users()
-
-		print (self.current_user)
-
-		curr_username = self.current_user["name"] if self.current_user else None
-
 		#self.write( { "users": resp, "current": curr_username } )
-		self.render("index.html", users = resp, current = curr_username  )
+		self.render("index.html", users = resp, current_username = self.current_username )
 
 
 class RegisterHandler(Basehandler):
-	async def post(self):
-		body = tornado.escape.json_decode(self.request.body)
+	async def get(self):
+		self.render("form.html", action="register", current_username = self.current_username )
 
-		username = body["username"]
-		password = body["password"]
+	async def post(self):
+		# body = tornado.escape.json_decode(self.request.body)
+		# username = body["username"]
+		# password = body["password"]
+
+		username = self.get_argument( "username" )
+		password = self.get_argument( "password" )
 
 		cursor = await self.find_user_byname(username)
 		count = cursor.count()
@@ -173,21 +181,35 @@ class RegisterHandler(Basehandler):
 			self.finish()
 			return
 
+		#injection here
 		usr = {"name":username, "pass": password}
 
 		uid = await self.create_user(usr)
 
-		self.write( { "userId": str(uid) } )
+		self.set_status(201)
+		self.redirect("/login")
+		#self.write( { "userId": str(uid) } )
 
 
 class LoginHandler(Basehandler):
+	async def get(self):
+		self.render("form.html", action="login", current_username = self.current_username )
+
 	async def post(self):
-		body = tornado.escape.json_decode(self.request.body)
+		#body = tornado.escape.json_decode(self.request.body)
+		#username = body["username"]
+		#password = body["password"]
 
-		username = body["username"]
-		password = body["password"]
+		username = self.get_argument( "username" )
+		password = self.get_argument( "password" )
 
+		print( username)
+		print(password)
+
+		#injection here
 		usr = {"name":username, "pass": password}
+
+		print(usr)
 
 		cursor = await self.find_user_by_logindata(usr)
 		count = cursor.count()
@@ -206,6 +228,9 @@ class LoginHandler(Basehandler):
 			self.set_cookie("_ws_token", cookie)
 			self.redirect("/")
 			return
+		else:
+			self.set_status(404)
+			self.write({ "status": "not found this user", "user": usr})
 
 
 class ChannelsHandler(RegisteredOnlyHandler):
@@ -213,7 +238,8 @@ class ChannelsHandler(RegisteredOnlyHandler):
 		channels = await self.get_all_channels()
 
 		self.set_status(200)
-		self.write( { "channels": channels } )
+		self.render("channels.html", current_username = self.current_username, channels = channels)
+		#self.write( { "channels": channels } )
 
 
 	async def post(self):
