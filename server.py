@@ -83,7 +83,7 @@ class Application(tornado.web.Application):
 
 class FlagBot(MongoDbModelsMiddleware, WSClientPoolMiddleware):
 
-    FLAG_POLLING_MS = 1000#120000
+    FLAG_POLLING_MS = 120000
     FLAG_CHANNEL = "VolgaCTF_Flag_Channel"
     FLAG = "VolgaCTF{__ooh_crazy_chat_but_pwned__}"
 
