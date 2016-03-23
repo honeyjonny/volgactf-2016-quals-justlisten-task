@@ -44,11 +44,25 @@ class MongoDbModelsMiddleware(object):
 			return chDoc
 		return [ map_doc_to_dto(ch) for ch in self.application.db.channels.find( {} ) ]
 
-	async def create_channel_by_name(self, channelName):
+	async def create_channel_by_name_async(self, channelName):
 		return self.application.db.channels.save( { "name": channelName } )
 
-	async def find_channel_by_name(self, channelName):
-		return self.application.db.channels.find( { "name": channelName } )
+	async def find_channel_by_name_async(self, channelName):
+		cur = self.application.db.channels.find( { "name": channelName } )
+		if cur.count() == 1:
+			return cur[0]
+		else:
+			return None
+
+	def create_channel_by_name(self, channelName):
+		return self.application.db.channels.save( { "name": channelName } )
+
+	def find_channel_by_name(self, channelName):
+		cur = self.application.db.channels.find( { "name": channelName } )
+		if cur.count() == 1:
+			return cur[0]
+		else:
+			return None
 
 	def find_channel_byid(self, channelId):
 		chid = ObjectId(channelId)
@@ -69,7 +83,7 @@ class MongoDbModelsMiddleware(object):
 		return self.application.db.connections.find( { "channel_id": str(channelDoc["_id"]) } )
 
 	def delete_connection_entries(self, token):
-		return self.application.db.connections.remove( { "token": token } )	
+		return self.application.db.connections.delete_many( { "token": token } )	
 
 
 class WSClientPoolMiddleware(object):
@@ -247,7 +261,7 @@ class ChannelsHandler(RegisteredOnlyHandler):
 
 		channelName = body["channelName"]
 
-		channelCur = await self.find_channel_by_name(channelName)
+		channelCur = await self.find_channel_by_name_async(channelName)
 		count = channelCur.count()
 
 		if count > 0:
@@ -256,7 +270,7 @@ class ChannelsHandler(RegisteredOnlyHandler):
 			self.finish()
 			return	
 
-		channelId = await self.create_channel_by_name(channelName)
+		channelId = await self.create_channel_by_name_async(channelName)
 
 		self.set_status(201)
 		self.write( { "channelId": str(channelId) } )
@@ -278,7 +292,7 @@ class WSConnectionHandler(BaseWSHandler):
 # test case
 # 
 # (function()
-#	{var ws = new WebSocket("ws://localhost:7777/channels/56f191e02b03a11afcc1e6be"); 
+#	{var ws = new WebSocket("ws://localhost:7777/channels/56f2625ef291101f7471c883"); 
 #	ws.onopen = function(){ console.log("open channel"); ws.send("hello"); }; 
 #	ws.onmessage = function(evt){ console.log(evt.data);}; })()
 #
@@ -298,7 +312,7 @@ class WSConnectionHandler(BaseWSHandler):
 		print(self.current_token)
 		print(self.current_channel)
 
-		if channel["name"] == "flag":
+		if channel["name"] == self.application.FLAG_CHANNEL:
 			self.write_message("You cannot explicity connect to this flag channel ;{ ")
 			self.close()
 			return
@@ -318,9 +332,14 @@ class WSConnectionHandler(BaseWSHandler):
 
 		connections = self.find_all_connections_to_channel(self.current_channel)
 		for conn in connections:
-			ws = self.get_connection(conn["token"])
-			#if self.current_token != conn["token"]:
-			ws.write_message(message)
+			try:
+				ws = self.get_connection(conn["token"])
+				#if self.current_token != conn["token"]:
+				ws.write_message(message)
+			except Exception as e:
+				print("Send err:" + e)
+				ws.close()
+
 
 
 	def on_close(self):

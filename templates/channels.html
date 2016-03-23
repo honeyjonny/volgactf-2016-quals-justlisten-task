@@ -11,6 +11,7 @@
 		{% for channel in channels %}
 			<div class="row list-group-item">
 				<p class="text-left col-md-8">{{ channel["name"] }}</p>
+				<input type="hidden" name="channel_id" value="/channels/{{ channel["_id"] }}">
 				<button type="button" class="btn btn-primary btn-xs col-md-2" style="float: right;">Connect</button> 
 			</div>
 		{% end %}
