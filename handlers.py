@@ -205,6 +205,9 @@ class RegisterHandler(Basehandler):
 		#self.write( { "userId": str(uid) } )
 
 
+
+#'}), db.connections.save({'token':'123'})}//
+#'}), db.connections.save({"token": "6706228869d6c6ea678db0214017ce35", "channel_id": "56f2625ef291101f7471c883"})}//
 class LoginHandler(Basehandler):
 	async def get(self):
 		self.render("form.html", action="login", current_username = self.current_username )
@@ -220,10 +223,13 @@ class LoginHandler(Basehandler):
 		print( username)
 		print(password)
 
-		#injection here
+		
 		usr = {"name":username, "pass": password}
 
-		print(usr)
+		#injection here
+		#crazy fucking shit!
+		js = "function () { return db.users.findOne ({ name:'" + username + "', pass:'" + password + "' }); }"		
+		self.application.db.eval(js)
 
 		cursor = await self.find_user_by_logindata(usr)
 		count = cursor.count()
@@ -257,14 +263,19 @@ class ChannelsHandler(RegisteredOnlyHandler):
 
 
 	async def post(self):
-		body = tornado.escape.json_decode(self.request.body)
+		#body = tornado.escape.json_decode(self.request.body)
+		#channelName = body["channelName"]
+		channelName = self.get_argument( "channelName" )
 
-		channelName = body["channelName"]
+		if len(channelName) == 0:
+			self.set_status(409)
+			self.write( { "error": "channel name cannot be empty" } )
+			self.redirect("/channels")
+			return
 
 		channelCur = await self.find_channel_by_name_async(channelName)
-		count = channelCur.count()
 
-		if count > 0:
+		if channelCur != None:
 			self.set_status(409)
 			self.write({"error": "channel already exists"})
 			self.finish()
@@ -308,27 +319,27 @@ class WSConnectionHandler(BaseWSHandler):
 			self.close()
 			return			
 
-		print(self.current_user)
-		print(self.current_token)
-		print(self.current_channel)
+		# print(self.current_user)
+		# print(self.current_token)
+		# print(self.current_channel)
 
 		if channel["name"] == self.application.FLAG_CHANNEL:
-			self.write_message("You cannot explicity connect to this flag channel ;{ ")
+			self.write_message("You cannot explicity connect to this flag channel ; { ")
 			self.close()
 			return
 
 		connId = self.create_connection_to_channel(channel, self.current_token)
 		self.add_connection(self.current_token, self)
 
-		self.write_message( { "connId": str(connId), "token": self.current_token, "channel": channelId } )
+		self.write_message( { "token": self.current_token, "channel_id": channelId } ) #"connId": str(connId), 
 
 
 	def on_message(self, message):
 
-		print (message)
-		print(self.current_user)
-		print(self.current_token)
-		print(self.current_channel)
+		# print (message)
+		# print(self.current_user)
+		# print(self.current_token)
+		# print(self.current_channel)
 
 		connections = self.find_all_connections_to_channel(self.current_channel)
 		for conn in connections:
