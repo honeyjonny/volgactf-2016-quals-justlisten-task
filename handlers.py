@@ -128,9 +128,6 @@ class RegisterHandler(Basehandler):
 		#self.write( { "userId": str(uid) } )
 
 
-# injection vectors
-#'}), db.connections.save({'token':'123'})}//
-#'}), db.connections.save({"token": "ca434f43e33ccf546a765742f60ec7ec", "channel_id": "56f442972b03a12728a9ff55"})}//
 class LoginHandler(Basehandler):
 	async def get(self):
 		self.render("form.html", action="login", current_username = self.current_username )
