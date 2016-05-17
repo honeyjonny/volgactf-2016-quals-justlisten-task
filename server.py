@@ -1,3 +1,5 @@
+# coding: UTF-8
+
 import tornado.escape
 import tornado.ioloop
 import tornado.options
