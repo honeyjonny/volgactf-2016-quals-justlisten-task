@@ -1,10 +1,14 @@
+### Description:
+---
 
-web socket chat application on tornado engine.
+This is a service (task) for [VolgaCTF 2016 Quals](https://volgactf.ru/) competition.
 
-with injection into NoSQL MongoDB vulnerability.
-you need to recive message from bot from VolgaCTF_Flag_Channel.
+Web socket chat application on tornado engine.
 
-use it for education purposes only.
+With injection into NoSQL MongoDB vulnerability.
+You need to recive message from bot from VolgaCTF_Flag_Channel.
+
+Use it for education purposes only.
 
 
 application use:
